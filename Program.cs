@@ -40,7 +40,7 @@ namespace AutoClicker
         public MacroActionType Type;
         public int X, Y;
         public int DelayMs;
-
+        
         public override string ToString()
         {
             return Type switch
@@ -165,10 +165,12 @@ namespace AutoClicker
             // Private fields
             private System.Windows.Forms.Timer clickTimer;
             private bool isRunning = false;
-            private int clicksPerSecond = 10;
+            private int baseIntervalMs = 100; // Base interval in milliseconds
             private MouseButtons currentMouseButton = MouseButtons.Left;
             private POINT clickPosition;
             private bool useFixedPosition = false;
+            private bool useRandomInterval = false;
+            private int randomPercentage = 20;
 
             // Macro recording fields
             private List<MacroAction> recordedMacro = new List<MacroAction>();
@@ -178,15 +180,27 @@ namespace AutoClicker
             private int macroPlaybackIndex = 0;
             private System.Windows.Forms.Timer macroTimer;
 
+            // Random delay
+            private Random random = new Random();
+
             // GUI Controls
             private Button btnStartStop;
-            private NumericUpDown nudCPS;
             private RadioButton rbLeftClick;
             private RadioButton rbRightClick;
             private CheckBox cbFixedPosition;
             private Button btnSetPosition;
             private Label lblPosition;
             private Label lblStatus;
+
+            // New interval controls
+            private GroupBox gbClickInterval;
+            private NumericUpDown nudSeconds;
+            private NumericUpDown nudMilliseconds;
+            private Label lblSeconds;
+            private Label lblMilliseconds;
+            private CheckBox cbRandomInterval;
+            private NumericUpDown nudRandomPercent;
+            private Label lblRandomPercent;
 
             // Macro controls
             private GroupBox gbMacro;
@@ -197,7 +211,7 @@ namespace AutoClicker
             private Label lblMacroStatus;
 
             // Debug controls
-            private TextBox txtDebug;
+            private TextBox? txtDebug;
 
             public MainForm()
             {
@@ -211,52 +225,140 @@ namespace AutoClicker
             private void InitializeComponent()
             {
                 this.Text = "AutoClicker Pro";
-                this.Size = new Size(500, 650);
+                this.Size = new Size(520, 700);
                 this.FormBorderStyle = FormBorderStyle.FixedSingle;
                 this.MaximizeBox = false;
                 this.StartPosition = FormStartPosition.CenterScreen;
+                this.BackColor = Color.FromArgb(240, 240, 240);
 
                 // Start/Stop button
                 btnStartStop = new Button
                 {
                     Text = "Käynnistä (F1)",
-                    Size = new Size(120, 40),
+                    Size = new Size(140, 45),
                     Location = new Point(20, 20),
-                    BackColor = Color.LightGreen
+                    BackColor = Color.LightGreen,
+                    Font = new Font("Segoe UI", 10, FontStyle.Bold)
                 };
                 btnStartStop.Click += BtnStartStop_Click;
 
-                // CPS setting
-                Label lblCPS = new Label
+                // Click Interval GroupBox
+                gbClickInterval = new GroupBox
                 {
-                    Text = "Klikkauksia sekunnissa:",
+                    Text = "Klikkausväli",
                     Location = new Point(20, 80),
-                    Size = new Size(150, 20)
+                    Size = new Size(240, 120),
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
                 };
 
-                nudCPS = new NumericUpDown
+                // Seconds input
+                Label lblSecondsLabel = new Label
+                {
+                    Text = "Sekuntia:",
+                    Location = new Point(15, 25),
+                    Size = new Size(60, 20),
+                    Font = new Font("Segoe UI", 9)
+                };
+
+                nudSeconds = new NumericUpDown
+                {
+                    Minimum = 0,
+                    Maximum = 999,
+                    Value = 0,
+                    Location = new Point(80, 23),
+                    Size = new Size(60, 25),
+                    Font = new Font("Segoe UI", 9)
+                };
+                nudSeconds.ValueChanged += UpdateInterval;
+
+                lblSeconds = new Label
+                {
+                    Text = "s",
+                    Location = new Point(145, 25),
+                    Size = new Size(15, 20),
+                    Font = new Font("Segoe UI", 9)
+                };
+
+                // Milliseconds input
+                Label lblMillisecondsLabel = new Label
+                {
+                    Text = "Millisekuntia:",
+                    Location = new Point(15, 55),
+                    Size = new Size(80, 20),
+                    Font = new Font("Segoe UI", 9)
+                };
+
+                nudMilliseconds = new NumericUpDown
                 {
                     Minimum = 1,
-                    Maximum = 1000,
-                    Value = 10,
-                    Location = new Point(180, 78),
-                    Size = new Size(80, 20)
+                    Maximum = 999,
+                    Value = 100,
+                    Location = new Point(100, 53),
+                    Size = new Size(60, 25),
+                    Font = new Font("Segoe UI", 9)
                 };
-                nudCPS.ValueChanged += (s, e) => clicksPerSecond = (int)nudCPS.Value;
+                nudMilliseconds.ValueChanged += UpdateInterval;
+
+                lblMilliseconds = new Label
+                {
+                    Text = "ms",
+                    Location = new Point(165, 55),
+                    Size = new Size(25, 20),
+                    Font = new Font("Segoe UI", 9)
+                };
+
+                // Random interval checkbox
+                cbRandomInterval = new CheckBox
+                {
+                    Text = "Satunnainen väli:",
+                    Location = new Point(15, 85),
+                    Size = new Size(110, 20),
+                    Font = new Font("Segoe UI", 9)
+                };
+                cbRandomInterval.CheckedChanged += (s, e) => useRandomInterval = cbRandomInterval.Checked;
+
+                nudRandomPercent = new NumericUpDown
+                {
+                    Minimum = 1,
+                    Maximum = 50,
+                    Value = 20,
+                    Location = new Point(130, 83),
+                    Size = new Size(50, 25),
+                    Font = new Font("Segoe UI", 9)
+                };
+                nudRandomPercent.ValueChanged += (s, e) => randomPercentage = (int)nudRandomPercent.Value;
+
+                lblRandomPercent = new Label
+                {
+                    Text = "±%",
+                    Location = new Point(185, 85),
+                    Size = new Size(25, 20),
+                    Font = new Font("Segoe UI", 9)
+                };
+
+                gbClickInterval.Controls.AddRange(new Control[]
+                {
+                    lblSecondsLabel, nudSeconds, lblSeconds,
+                    lblMillisecondsLabel, nudMilliseconds, lblMilliseconds,
+                    cbRandomInterval, nudRandomPercent, lblRandomPercent
+                });
 
                 // Mouse button selection
                 GroupBox gbMouseButton = new GroupBox
                 {
                     Text = "Hiiren painike",
-                    Location = new Point(20, 110),
-                    Size = new Size(150, 70)
+                    Location = new Point(280, 80),
+                    Size = new Size(150, 70),
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
                 };
 
                 rbLeftClick = new RadioButton
                 {
                     Text = "Vasen",
-                    Location = new Point(10, 20),
-                    Checked = true
+                    Location = new Point(15, 25),
+                    Size = new Size(60, 20),
+                    Checked = true,
+                    Font = new Font("Segoe UI", 9)
                 };
                 rbLeftClick.CheckedChanged += (s, e) =>
                 {
@@ -266,7 +368,9 @@ namespace AutoClicker
                 rbRightClick = new RadioButton
                 {
                     Text = "Oikea",
-                    Location = new Point(10, 45)
+                    Location = new Point(80, 25),
+                    Size = new Size(60, 20),
+                    Font = new Font("Segoe UI", 9)
                 };
                 rbRightClick.CheckedChanged += (s, e) =>
                 {
@@ -279,87 +383,96 @@ namespace AutoClicker
                 cbFixedPosition = new CheckBox
                 {
                     Text = "Kiinteä sijainti",
-                    Location = new Point(20, 190),
-                    Size = new Size(120, 20)
+                    Location = new Point(20, 220),
+                    Size = new Size(120, 20),
+                    Font = new Font("Segoe UI", 9)
                 };
                 cbFixedPosition.CheckedChanged += (s, e) => useFixedPosition = cbFixedPosition.Checked;
 
                 btnSetPosition = new Button
                 {
                     Text = "Aseta sijainti",
-                    Location = new Point(150, 188),
-                    Size = new Size(100, 25)
+                    Location = new Point(150, 218),
+                    Size = new Size(100, 25),
+                    Font = new Font("Segoe UI", 9)
                 };
                 btnSetPosition.Click += BtnSetPosition_Click;
 
                 lblPosition = new Label
                 {
                     Text = $"Sijainti: {clickPosition.X}, {clickPosition.Y}",
-                    Location = new Point(20, 220),
-                    Size = new Size(200, 20)
+                    Location = new Point(20, 250),
+                    Size = new Size(200, 20),
+                    Font = new Font("Segoe UI", 9)
                 };
 
                 // Macro controls
                 gbMacro = new GroupBox
                 {
                     Text = "Makro-tallennin",
-                    Location = new Point(20, 250),
-                    Size = new Size(450, 220)
+                    Location = new Point(20, 280),
+                    Size = new Size(470, 220),
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
                 };
 
                 btnRecordMacro = new Button
                 {
                     Text = "Aloita tallennus (F2)",
-                    Location = new Point(10, 25),
-                    Size = new Size(130, 30),
-                    BackColor = Color.LightBlue
+                    Location = new Point(15, 25),
+                    Size = new Size(140, 35),
+                    BackColor = Color.LightBlue,
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
                 };
                 btnRecordMacro.Click += BtnRecordMacro_Click;
 
                 btnPlayMacro = new Button
                 {
                     Text = "Toista makro (F3)",
-                    Location = new Point(150, 25),
-                    Size = new Size(130, 30),
+                    Location = new Point(165, 25),
+                    Size = new Size(140, 35),
                     BackColor = Color.LightYellow,
-                    Enabled = false
+                    Enabled = false,
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
                 };
                 btnPlayMacro.Click += BtnPlayMacro_Click;
 
                 btnClearMacro = new Button
                 {
                     Text = "Tyhjennä",
-                    Location = new Point(290, 25),
-                    Size = new Size(80, 30),
-                    BackColor = Color.LightCoral
+                    Location = new Point(315, 25),
+                    Size = new Size(80, 35),
+                    BackColor = Color.LightCoral,
+                    Font = new Font("Segoe UI", 9, FontStyle.Bold)
                 };
                 btnClearMacro.Click += BtnClearMacro_Click;
 
                 lblMacroStatus = new Label
                 {
                     Text = "Valmis tallentamaan",
-                    Location = new Point(10, 65),
-                    Size = new Size(300, 20),
-                    ForeColor = Color.Blue
+                    Location = new Point(15, 70),
+                    Size = new Size(400, 20),
+                    ForeColor = Color.Blue,
+                    Font = new Font("Segoe UI", 9)
                 };
 
                 lbMacroActions = new ListBox
                 {
-                    Location = new Point(10, 90),
-                    Size = new Size(430, 120)
+                    Location = new Point(15, 95),
+                    Size = new Size(440, 115),
+                    Font = new Font("Consolas", 8)
                 };
 
                 gbMacro.Controls.AddRange(new Control[]
                 {
-                btnRecordMacro, btnPlayMacro, btnClearMacro,
-                lblMacroStatus, lbMacroActions
+                    btnRecordMacro, btnPlayMacro, btnClearMacro,
+                    lblMacroStatus, lbMacroActions
                 });
 
                 // Debug window
                 txtDebug = new TextBox
                 {
-                    Location = new Point(20, 480),
-                    Size = new Size(450, 100),
+                    Location = new Point(20, 510),
+                    Size = new Size(470, 100),
                     Multiline = true,
                     ScrollBars = ScrollBars.Vertical,
                     ReadOnly = true,
@@ -372,18 +485,38 @@ namespace AutoClicker
                 lblStatus = new Label
                 {
                     Text = "Pysäytetty - Paina F1 käynnistääksesi",
-                    Location = new Point(20, 590),
-                    Size = new Size(400, 20),
-                    ForeColor = Color.Red
+                    Location = new Point(20, 620),
+                    Size = new Size(400, 25),
+                    ForeColor = Color.Red,
+                    Font = new Font("Segoe UI", 10, FontStyle.Bold)
                 };
 
                 // Add all controls to form
                 this.Controls.AddRange(new Control[]
                 {
-                btnStartStop, lblCPS, nudCPS, gbMouseButton,
-                cbFixedPosition, btnSetPosition, lblPosition,
-                gbMacro, txtDebug, lblStatus
+                    btnStartStop, gbClickInterval, gbMouseButton,
+                    cbFixedPosition, btnSetPosition, lblPosition,
+                    gbMacro, txtDebug, lblStatus
                 });
+
+                // Initialize interval calculation
+                UpdateInterval(null, null);
+            }
+
+            private void UpdateInterval(object sender, EventArgs e)
+            {
+                int seconds = (int)nudSeconds.Value;
+                int milliseconds = (int)nudMilliseconds.Value;
+                baseIntervalMs = (seconds * 1000) + milliseconds;
+                
+                // Ensure minimum interval of 1ms
+                if (baseIntervalMs < 1) baseIntervalMs = 1;
+                
+                // Update timer if running
+                if (isRunning && clickTimer != null)
+                {
+                    clickTimer.Interval = GetRandomizedInterval(baseIntervalMs);
+                }
             }
 
             private void InitializeTimer()
@@ -412,7 +545,6 @@ namespace AutoClicker
                             ToggleClicking();
                             break;
                         case HOTKEY_ID_RECORD:
-                            // Don't allow recording hotkey during macro playback
                             if (!isPlayingMacro)
                                 ToggleRecording();
                             break;
@@ -444,13 +576,16 @@ namespace AutoClicker
             private void StartClicking()
             {
                 isRunning = true;
-                int interval = Math.Max(1, 1000 / clicksPerSecond);
-                clickTimer.Interval = interval;
+                
+                clickTimer.Interval = GetRandomizedInterval(baseIntervalMs);
                 clickTimer.Start();
 
                 btnStartStop.Text = "Pysäytä (F1)";
                 btnStartStop.BackColor = Color.LightCoral;
-                lblStatus.Text = $"Käynnissä - {clicksPerSecond} CPS";
+
+                double clicksPerSecond = 1000.0 / baseIntervalMs;
+                string intervalInfo = useRandomInterval ? $" (±{randomPercentage}%)" : "";
+                lblStatus.Text = $"Käynnissä - {clicksPerSecond:F1} CPS, {baseIntervalMs}ms väli{intervalInfo}";
                 lblStatus.ForeColor = Color.Green;
             }
 
@@ -468,6 +603,25 @@ namespace AutoClicker
             private void ClickTimer_Tick(object sender, EventArgs e)
             {
                 PerformClick();
+
+                // Randomize next interval if enabled
+                if (useRandomInterval && isRunning)
+                {
+                    clickTimer.Interval = GetRandomizedInterval(baseIntervalMs);
+                }
+            }
+
+            private int GetRandomizedInterval(int baseInterval)
+            {
+                if (!useRandomInterval)
+                    return baseInterval;
+
+                // Calculate random variation based on percentage
+                double variation = baseInterval * (randomPercentage / 100.0);
+                int minInterval = Math.Max(1, (int)(baseInterval - variation));
+                int maxInterval = (int)(baseInterval + variation);
+                
+                return random.Next(minInterval, maxInterval + 1);
             }
 
             private void PerformClick()
@@ -477,7 +631,6 @@ namespace AutoClicker
                 // Move mouse to position if using fixed position
                 if (useFixedPosition)
                 {
-                    // Move mouse to the stored position first
                     INPUT moveInput = new INPUT
                     {
                         type = INPUT_MOUSE,
@@ -488,7 +641,7 @@ namespace AutoClicker
                                 dx = clickPosition.X * 65536 / Screen.PrimaryScreen.Bounds.Width,
                                 dy = clickPosition.Y * 65536 / Screen.PrimaryScreen.Bounds.Height,
                                 mouseData = 0,
-                                dwFlags = 0x0001 | 0x8000, // MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE
+                                dwFlags = 0x0001 | 0x8000,
                                 time = 0,
                                 dwExtraInfo = GetMessageExtraInfo()
                             }
@@ -496,12 +649,11 @@ namespace AutoClicker
                     };
 
                     SendInput(1, new INPUT[] { moveInput }, Marshal.SizeOf(typeof(INPUT)));
-                    Thread.Sleep(1); // Small delay to ensure mouse moved
+                    Thread.Sleep(1);
                 }
 
                 if (currentMouseButton == MouseButtons.Left)
                 {
-                    // Left mouse down
                     inputs[0] = new INPUT
                     {
                         type = INPUT_MOUSE,
@@ -509,17 +661,13 @@ namespace AutoClicker
                         {
                             mi = new MOUSEINPUT
                             {
-                                dx = 0,
-                                dy = 0,
-                                mouseData = 0,
+                                dx = 0, dy = 0, mouseData = 0,
                                 dwFlags = MOUSEEVENTF_LEFTDOWN,
-                                time = 0,
-                                dwExtraInfo = GetMessageExtraInfo()
+                                time = 0, dwExtraInfo = GetMessageExtraInfo()
                             }
                         }
                     };
 
-                    // Left mouse up
                     inputs[1] = new INPUT
                     {
                         type = INPUT_MOUSE,
@@ -527,19 +675,15 @@ namespace AutoClicker
                         {
                             mi = new MOUSEINPUT
                             {
-                                dx = 0,
-                                dy = 0,
-                                mouseData = 0,
+                                dx = 0, dy = 0, mouseData = 0,
                                 dwFlags = MOUSEEVENTF_LEFTUP,
-                                time = 0,
-                                dwExtraInfo = GetMessageExtraInfo()
+                                time = 0, dwExtraInfo = GetMessageExtraInfo()
                             }
                         }
                     };
                 }
-                else // Right click
+                else
                 {
-                    // Right mouse down
                     inputs[0] = new INPUT
                     {
                         type = INPUT_MOUSE,
@@ -547,17 +691,13 @@ namespace AutoClicker
                         {
                             mi = new MOUSEINPUT
                             {
-                                dx = 0,
-                                dy = 0,
-                                mouseData = 0,
+                                dx = 0, dy = 0, mouseData = 0,
                                 dwFlags = MOUSEEVENTF_RIGHTDOWN,
-                                time = 0,
-                                dwExtraInfo = GetMessageExtraInfo()
+                                time = 0, dwExtraInfo = GetMessageExtraInfo()
                             }
                         }
                     };
 
-                    // Right mouse up
                     inputs[1] = new INPUT
                     {
                         type = INPUT_MOUSE,
@@ -565,12 +705,9 @@ namespace AutoClicker
                         {
                             mi = new MOUSEINPUT
                             {
-                                dx = 0,
-                                dy = 0,
-                                mouseData = 0,
+                                dx = 0, dy = 0, mouseData = 0,
                                 dwFlags = MOUSEEVENTF_RIGHTUP,
-                                time = 0,
-                                dwExtraInfo = GetMessageExtraInfo()
+                                time = 0, dwExtraInfo = GetMessageExtraInfo()
                             }
                         }
                     };
@@ -579,28 +716,19 @@ namespace AutoClicker
                 SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
             }
 
-            private POINT GetCurrentCursorPosition()
-            {
-                GetCursorPos(out POINT pos);
-                return pos;
-            }
-
             private async void BtnSetPosition_Click(object sender, EventArgs e)
             {
-                // Disable button and show countdown
                 btnSetPosition.Enabled = false;
 
                 for (int i = 3; i >= 1; i--)
                 {
                     btnSetPosition.Text = $"Siirry paikkaan ({i})";
-                    await Task.Delay(1000); // Wait 1 second
+                    await Task.Delay(1000);
                 }
 
-                // Get position after countdown
                 GetCursorPos(out clickPosition);
                 lblPosition.Text = $"Sijainti: {clickPosition.X}, {clickPosition.Y}";
 
-                // Reset button
                 btnSetPosition.Text = "Aseta sijainti";
                 btnSetPosition.Enabled = true;
             }
@@ -610,7 +738,6 @@ namespace AutoClicker
                 StopClicking();
                 StopRecording();
 
-                // Cleanup global mouse hook
                 if (_hookID != IntPtr.Zero)
                 {
                     UnhookWindowsHookEx(_hookID);
@@ -626,12 +753,10 @@ namespace AutoClicker
             // Macro functionality
             private void BtnRecordMacro_Click(object sender, EventArgs e)
             {
-                // EXTREME DEBUG: Log everything
                 var debugInfo = $"NAPPI KLIKATTU! isPlaying: {isPlayingMacro}, isRecording: {isRecording}, Enabled: {btnRecordMacro.Enabled}";
                 lblMacroStatus.Text = debugInfo;
                 System.Diagnostics.Debug.WriteLine(debugInfo);
 
-                // Check if button should even be responding
                 if (!btnRecordMacro.Enabled)
                 {
                     lblMacroStatus.Text = "VIRHE: Nappi reagoi vaikka se on pois käytöstä!";
@@ -639,10 +764,8 @@ namespace AutoClicker
                     return;
                 }
 
-                // Debug: Show what's happening
                 this.Text = $"AutoClicker Pro - Recording: {isRecording}, Playing: {isPlayingMacro}";
 
-                // Prevent recording toggle during macro playback
                 if (isPlayingMacro)
                 {
                     lblMacroStatus.Text = "ESTETTY: Ei voi tallentaa makron toiston aikana!";
@@ -669,7 +792,6 @@ namespace AutoClicker
 
             private void ToggleRecording()
             {
-                // Prevent recording during macro playback
                 if (isPlayingMacro) return;
 
                 if (isRecording)
@@ -693,7 +815,7 @@ namespace AutoClicker
 
                 recordedMacro.Clear();
                 lbMacroActions.Items.Clear();
-                txtDebug.Clear(); // Clear debug window
+                txtDebug?.Clear();
                 isRecording = true;
                 recordingStartTime = DateTime.Now;
 
@@ -721,9 +843,8 @@ namespace AutoClicker
             {
                 if (!isRecording) return;
 
-                isRecording = false;  // SET TO FALSE when recording stops
+                isRecording = false;
 
-                // Remove global mouse hook
                 if (_hookID != IntPtr.Zero)
                 {
                     UnhookWindowsHookEx(_hookID);
@@ -735,7 +856,6 @@ namespace AutoClicker
                 lblMacroStatus.Text = $"Tallennus valmis - {recordedMacro.Count} toimintoa";
                 lblMacroStatus.ForeColor = Color.Green;
 
-                // Debug: Show recording state
                 this.Text = $"AutoClicker Pro - VALMIS (Recording: {isRecording})";
 
                 btnPlayMacro.Enabled = recordedMacro.Count > 0;
@@ -765,13 +885,11 @@ namespace AutoClicker
 
                             _instance.LogDebug($"CLICK DETECTED: Button={wParam}, Pos=({hookStruct.pt.X},{hookStruct.pt.Y})");
 
-                            // Check if click is on our autoclicker window - SIMPLIFIED CHECK
                             IntPtr clickedWindow = WindowFromPoint(hookStruct.pt);
                             IntPtr topWindow = GetForegroundWindow();
 
                             _instance.LogDebug($"Window check: clicked={clickedWindow}, top={topWindow}, our={_instance.Handle}");
 
-                            // Only ignore if BOTH the clicked window AND foreground window are ours
                             if (clickedWindow != IntPtr.Zero && topWindow == _instance.Handle &&
                                 clickedWindow == _instance.Handle)
                             {
@@ -813,7 +931,6 @@ namespace AutoClicker
                 recordedMacro.Add(action);
                 LogDebug($"ADDED: Count={recordedMacro.Count}, Action={action}");
 
-                // Update UI safely from any thread
                 try
                 {
                     this.Invoke(new Action(() =>
@@ -839,7 +956,7 @@ namespace AutoClicker
 
                 try
                 {
-                    if (txtDebug.InvokeRequired)
+                    if (txtDebug?.InvokeRequired == true)
                     {
                         txtDebug.Invoke(new Action(() =>
                         {
@@ -848,7 +965,7 @@ namespace AutoClicker
                             txtDebug.ScrollToCaret();
                         }));
                     }
-                    else
+                    else if (txtDebug != null)
                     {
                         txtDebug.AppendText(logEntry + Environment.NewLine);
                         txtDebug.SelectionStart = txtDebug.Text.Length;
@@ -884,16 +1001,15 @@ namespace AutoClicker
                 lblMacroStatus.Text = "Toistaa makroa... (KAIKKI NAPIT LUKITTU)";
                 lblMacroStatus.ForeColor = Color.Orange;
 
-                // Debug: Update title
                 this.Text = $"AutoClicker Pro - TOISTAA MAKROA";
 
-                // DISABLE ALL BUTTONS during macro playback (but keep them visible)
                 btnRecordMacro.Enabled = false;
                 btnStartStop.Enabled = false;
                 btnSetPosition.Enabled = false;
                 btnClearMacro.Enabled = false;
+                cbRandomInterval.Enabled = false;
+                nudRandomPercent.Enabled = false;
 
-                // Debug: Confirm button state
                 System.Diagnostics.Debug.WriteLine($"MAKRO ALKAA: btnRecordMacro.Enabled = {btnRecordMacro.Enabled}");
 
                 PlayNextMacroAction();
@@ -909,10 +1025,8 @@ namespace AutoClicker
                 lblMacroStatus.Text = "Makro valmis - Napit palautettu";
                 lblMacroStatus.ForeColor = Color.Blue;
 
-                // Reset title immediately
                 this.Text = "AutoClicker Pro";
 
-                // RE-ENABLE ALL BUTTONS immediately
                 btnRecordMacro.Enabled = true;
                 btnStartStop.Enabled = true;
                 btnSetPosition.Enabled = true;
@@ -925,7 +1039,6 @@ namespace AutoClicker
             {
                 if (!isPlayingMacro || macroPlaybackIndex >= recordedMacro.Count)
                 {
-                    // Macro finished
                     StopMacroPlayback();
                     lblMacroStatus.Text = "Makro toistettu loppuun (Tallennus VAPAA)";
                     return;
@@ -933,7 +1046,6 @@ namespace AutoClicker
 
                 var action = recordedMacro[macroPlaybackIndex];
 
-                // Calculate delay for this action
                 int delay = 0;
                 if (macroPlaybackIndex > 0)
                 {
@@ -941,12 +1053,10 @@ namespace AutoClicker
                 }
                 else
                 {
-                    // First action: use small delay instead of recorded delay
-                    delay = 50; // Small delay for first action
+                    delay = 50;
                 }
 
-                // Set timer for the delay
-                macroTimer.Interval = Math.Max(10, delay); // Minimum 10ms delay
+                macroTimer.Interval = Math.Max(10, delay);
                 macroTimer.Start();
             }
 
@@ -961,17 +1071,15 @@ namespace AutoClicker
 
                 macroPlaybackIndex++;
 
-                // Check if this was the last action
                 if (macroPlaybackIndex >= recordedMacro.Count)
                 {
-                    // Schedule the end of macro AFTER the last click has been processed
                     var endTimer = new System.Windows.Forms.Timer();
-                    endTimer.Interval = 100; // Very short delay just to let the last click complete
+                    endTimer.Interval = 100;
                     endTimer.Tick += (s, ev) =>
                     {
                         endTimer.Stop();
                         endTimer.Dispose();
-                        if (isPlayingMacro) // Double check we're still playing
+                        if (isPlayingMacro)
                         {
                             StopMacroPlayback();
                         }
@@ -1016,7 +1124,7 @@ namespace AutoClicker
                             dx = x * 65536 / Screen.PrimaryScreen.Bounds.Width,
                             dy = y * 65536 / Screen.PrimaryScreen.Bounds.Height,
                             mouseData = 0,
-                            dwFlags = 0x0001 | 0x8000, // MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE
+                            dwFlags = 0x0001 | 0x8000,
                             time = 0,
                             dwExtraInfo = GetMessageExtraInfo()
                         }
