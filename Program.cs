@@ -19,8 +19,11 @@ namespace AutoClicker
         private MouseButtons currentMouseButton = MouseButtons.Left;
         private POINT clickPosition;
         private bool useFixedPosition = false;
+        
+        // Random interval fields
         private bool useRandomInterval = false;
-        private int randomPercentage = 20;
+        private double randomMinSeconds = 5.0;
+        private double randomMaxSeconds = 10.0;
 
         // Random delay
         private Random random = new Random();
@@ -138,10 +141,17 @@ namespace AutoClicker
             POINT? targetPosition = useFixedPosition ? clickPosition : null;
             ClickService.PerformClick(currentMouseButton, targetPosition, useFixedPosition);
 
-            // Randomize next interval if enabled
-            if (useRandomInterval && isRunning)
+            // Set next interval based on mode
+            if (useRandomInterval)
             {
-                clickTimer.Interval = ClickService.GetRandomizedInterval(baseIntervalMs, useRandomInterval, randomPercentage, random);
+                // Calculate random interval in seconds, then convert to milliseconds
+                double randomSeconds = randomMinSeconds + (random.NextDouble() * (randomMaxSeconds - randomMinSeconds));
+                clickTimer.Interval = Math.Max(10, (int)(randomSeconds * 1000));
+            }
+            else
+            {
+                // Use fixed interval
+                clickTimer.Interval = Math.Max(1, baseIntervalMs);
             }
         }
 
@@ -154,10 +164,62 @@ namespace AutoClicker
             // Ensure minimum interval of 1ms
             if (baseIntervalMs < 1) baseIntervalMs = 1;
             
-            // Update timer if running
-            if (isRunning && clickTimer != null)
+            // Update timer if running and using fixed interval
+            if (isRunning && !useRandomInterval && clickTimer != null)
             {
-                clickTimer.Interval = ClickService.GetRandomizedInterval(baseIntervalMs, useRandomInterval, randomPercentage, random);
+                clickTimer.Interval = baseIntervalMs;
+            }
+        }
+
+        private void UpdateRandomInterval(object sender, EventArgs e)
+        {
+            randomMinSeconds = (double)nudRandomMin.Value;
+            randomMaxSeconds = (double)nudRandomMax.Value;
+            
+            // Ensure min <= max
+            if (randomMinSeconds > randomMaxSeconds)
+            {
+                if (sender == nudRandomMin)
+                {
+                    nudRandomMax.Value = (decimal)randomMinSeconds;
+                    randomMaxSeconds = randomMinSeconds;
+                }
+                else
+                {
+                    nudRandomMin.Value = (decimal)randomMaxSeconds;
+                    randomMinSeconds = randomMaxSeconds;
+                }
+            }
+        }
+
+        private void UpdateIntervalMode()
+        {
+            // Update UI to show which mode is active
+            if (useRandomInterval)
+            {
+                // Random mode active - dark theme
+                gbRandomInterval.BackColor = Color.FromArgb(45, 45, 48);
+                gbRandomInterval.ForeColor = Color.White;
+                cbRandomInterval.ForeColor = Color.White;
+                lblRandomMinUnit.ForeColor = Color.LightGray;
+                lblRandomMaxUnit.ForeColor = Color.LightGray;
+                
+                // Disable fixed interval
+                gbClickInterval.Enabled = false;
+                gbClickInterval.ForeColor = Color.Gray;
+            }
+            else
+            {
+                // Fixed mode active - light theme
+                gbRandomInterval.BackColor = Color.FromArgb(240, 240, 240);
+                gbRandomInterval.ForeColor = Color.Black;
+                cbRandomInterval.ForeColor = Color.Black;
+                lblRandomMinUnit.ForeColor = Color.Black;
+                lblRandomMaxUnit.ForeColor = Color.Black;
+                
+                // Enable fixed interval
+                gbClickInterval.Enabled = true;
+                gbClickInterval.ForeColor = Color.Black;
             }
         }
 
@@ -215,7 +277,8 @@ namespace AutoClicker
                     btnSetPosition.Enabled = !isPlaying;
                     btnClearMacro.Enabled = !isPlaying;
                     cbRandomInterval.Enabled = !isPlaying;
-                    nudRandomPercent.Enabled = !isPlaying;
+                    nudRandomMin.Enabled = !isPlaying && useRandomInterval;
+                    nudRandomMax.Enabled = !isPlaying && useRandomInterval;
 
                     // Update macro buttons
                     if (isPlaying)
@@ -259,15 +322,32 @@ namespace AutoClicker
         {
             isRunning = true;
             
-            clickTimer.Interval = ClickService.GetRandomizedInterval(baseIntervalMs, useRandomInterval, randomPercentage, random);
+            // Set initial interval based on mode
+            if (useRandomInterval)
+            {
+                double randomSeconds = randomMinSeconds + (random.NextDouble() * (randomMaxSeconds - randomMinSeconds));
+                clickTimer.Interval = Math.Max(10, (int)(randomSeconds * 1000));
+            }
+            else
+            {
+                clickTimer.Interval = Math.Max(1, baseIntervalMs);
+            }
+            
             clickTimer.Start();
 
             btnStartStop.Text = "Pysäytä (F1)";
             btnStartStop.BackColor = System.Drawing.Color.LightCoral;
 
-            double clicksPerSecond = 1000.0 / baseIntervalMs;
-            string intervalInfo = useRandomInterval ? $" (±{randomPercentage}%)" : "";
-            lblStatus.Text = $"Käynnissä - {clicksPerSecond:F1} CPS, {baseIntervalMs}ms väli{intervalInfo}";
+            // Update status based on mode
+            if (useRandomInterval)
+            {
+                lblStatus.Text = $"Käynnissä - Satunnainen väli {randomMinSeconds:F1}-{randomMaxSeconds:F1}s";
+            }
+            else
+            {
+                double clicksPerSecond = 1000.0 / baseIntervalMs;
+                lblStatus.Text = $"Käynnissä - {clicksPerSecond:F1} CPS, {baseIntervalMs}ms väli";
+            }
             lblStatus.ForeColor = System.Drawing.Color.Green;
         }
 

@@ -20,15 +20,20 @@ namespace AutoClicker
         private Label lblPosition;
         private Label lblStatus;
 
-        // New interval controls
+        // Interval controls
         private GroupBox gbClickInterval;
         private NumericUpDown nudSeconds;
         private NumericUpDown nudMilliseconds;
         private Label lblSeconds;
         private Label lblMilliseconds;
+
+        // Random interval controls
+        private GroupBox gbRandomInterval;
         private CheckBox cbRandomInterval;
-        private NumericUpDown nudRandomPercent;
-        private Label lblRandomPercent;
+        private NumericUpDown nudRandomMin;
+        private NumericUpDown nudRandomMax;
+        private Label lblRandomMinUnit;
+        private Label lblRandomMaxUnit;
 
         // Macro controls
         private GroupBox gbMacro;
@@ -63,7 +68,7 @@ namespace AutoClicker
         private void InitializeComponent()
         {
             this.Text = "AutoClicker Pro";
-            this.Size = new Size(520, 700);
+            this.Size = new Size(580, 720);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -80,12 +85,12 @@ namespace AutoClicker
             };
             btnStartStop.Click += BtnStartStop_Click;
 
-            // Click Interval GroupBox
+            // Fixed Click Interval GroupBox
             gbClickInterval = new GroupBox
             {
-                Text = "Klikkausväli",
+                Text = "Kiinteä klikkausväli",
                 Location = new Point(20, 80),
-                Size = new Size(240, 120),
+                Size = new Size(240, 100),
                 Font = new Font("Segoe UI", 9, FontStyle.Bold)
             };
 
@@ -145,47 +150,97 @@ namespace AutoClicker
                 Font = new Font("Segoe UI", 9)
             };
 
-            // Random interval checkbox
-            cbRandomInterval = new CheckBox
-            {
-                Text = "Satunnainen väli:",
-                Location = new Point(15, 85),
-                Size = new Size(110, 20),
-                Font = new Font("Segoe UI", 9)
-            };
-            cbRandomInterval.CheckedChanged += (s, e) => useRandomInterval = cbRandomInterval.Checked;
-
-            nudRandomPercent = new NumericUpDown
-            {
-                Minimum = 1,
-                Maximum = 50,
-                Value = 20,
-                Location = new Point(130, 83),
-                Size = new Size(50, 25),
-                Font = new Font("Segoe UI", 9)
-            };
-            nudRandomPercent.ValueChanged += (s, e) => randomPercentage = (int)nudRandomPercent.Value;
-
-            lblRandomPercent = new Label
-            {
-                Text = "±%",
-                Location = new Point(185, 85),
-                Size = new Size(25, 20),
-                Font = new Font("Segoe UI", 9)
-            };
-
             gbClickInterval.Controls.AddRange(new Control[]
             {
                 lblSecondsLabel, nudSeconds, lblSeconds,
-                lblMillisecondsLabel, nudMilliseconds, lblMilliseconds,
-                cbRandomInterval, nudRandomPercent, lblRandomPercent
+                lblMillisecondsLabel, nudMilliseconds, lblMilliseconds
+            });
+
+            // Random Click Interval GroupBox
+            gbRandomInterval = new GroupBox
+            {
+                Text = "Random Click Interval",
+                Location = new Point(280, 80),
+                Size = new Size(270, 100),
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.Black
+            };
+
+            cbRandomInterval = new CheckBox
+            {
+                Text = "Käytä satunnaista väliä",
+                Location = new Point(15, 25),
+                Size = new Size(150, 20),
+                Font = new Font("Segoe UI", 9),
+                ForeColor = Color.Black
+            };
+            cbRandomInterval.CheckedChanged += (s, e) => 
+            {
+                useRandomInterval = cbRandomInterval.Checked;
+                nudRandomMin.Enabled = useRandomInterval;
+                nudRandomMax.Enabled = useRandomInterval;
+                
+                // Update interval mode
+                UpdateIntervalMode();
+            };
+
+            nudRandomMin = new NumericUpDown
+            {
+                Minimum = 0,
+                Maximum = 9999,
+                Value = 5,
+                DecimalPlaces = 1,
+                Increment = 0.1m,
+                Location = new Point(15, 55),
+                Size = new Size(70, 25),
+                Font = new Font("Segoe UI", 9),
+                Enabled = false
+            };
+            nudRandomMin.ValueChanged += UpdateRandomInterval;
+
+            lblRandomMinUnit = new Label
+            {
+                Text = "Secs.",
+                Location = new Point(90, 57),
+                Size = new Size(35, 20),
+                Font = new Font("Segoe UI", 8),
+                ForeColor = Color.Black
+            };
+
+            nudRandomMax = new NumericUpDown
+            {
+                Minimum = 0,
+                Maximum = 9999,
+                Value = 10,
+                DecimalPlaces = 1,
+                Increment = 0.1m,
+                Location = new Point(140, 55),
+                Size = new Size(70, 25),
+                Font = new Font("Segoe UI", 9),
+                Enabled = false
+            };
+            nudRandomMax.ValueChanged += UpdateRandomInterval;
+
+            lblRandomMaxUnit = new Label
+            {
+                Text = "Secs.",
+                Location = new Point(215, 57),
+                Size = new Size(35, 20),
+                Font = new Font("Segoe UI", 8),
+                ForeColor = Color.Black
+            };
+
+            gbRandomInterval.Controls.AddRange(new Control[]
+            {
+                cbRandomInterval, nudRandomMin, lblRandomMinUnit, nudRandomMax, lblRandomMaxUnit
             });
 
             // Mouse button selection
             GroupBox gbMouseButton = new GroupBox
             {
                 Text = "Hiiren painike",
-                Location = new Point(280, 80),
+                Location = new Point(20, 190),
                 Size = new Size(150, 70),
                 Font = new Font("Segoe UI", 9, FontStyle.Bold)
             };
@@ -221,7 +276,7 @@ namespace AutoClicker
             cbFixedPosition = new CheckBox
             {
                 Text = "Kiinteä sijainti",
-                Location = new Point(20, 220),
+                Location = new Point(20, 280),
                 Size = new Size(120, 20),
                 Font = new Font("Segoe UI", 9)
             };
@@ -230,7 +285,7 @@ namespace AutoClicker
             btnSetPosition = new Button
             {
                 Text = "Aseta sijainti",
-                Location = new Point(150, 218),
+                Location = new Point(150, 278),
                 Size = new Size(100, 25),
                 Font = new Font("Segoe UI", 9)
             };
@@ -239,7 +294,7 @@ namespace AutoClicker
             lblPosition = new Label
             {
                 Text = $"Sijainti: {clickPosition.X}, {clickPosition.Y}",
-                Location = new Point(20, 250),
+                Location = new Point(20, 310),
                 Size = new Size(200, 20),
                 Font = new Font("Segoe UI", 9)
             };
@@ -248,8 +303,8 @@ namespace AutoClicker
             gbMacro = new GroupBox
             {
                 Text = "Makro-tallennin",
-                Location = new Point(20, 280),
-                Size = new Size(470, 220),
+                Location = new Point(20, 340),
+                Size = new Size(530, 220),
                 Font = new Font("Segoe UI", 9, FontStyle.Bold)
             };
 
@@ -296,7 +351,7 @@ namespace AutoClicker
             lbMacroActions = new ListBox
             {
                 Location = new Point(15, 95),
-                Size = new Size(440, 115),
+                Size = new Size(500, 115),
                 Font = new Font("Consolas", 8)
             };
 
@@ -309,8 +364,8 @@ namespace AutoClicker
             // Debug window
             txtDebug = new TextBox
             {
-                Location = new Point(20, 510),
-                Size = new Size(470, 100),
+                Location = new Point(20, 570),
+                Size = new Size(530, 80),
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
                 ReadOnly = true,
@@ -323,8 +378,8 @@ namespace AutoClicker
             lblStatus = new Label
             {
                 Text = "Pysäytetty - Paina F1 käynnistääksesi",
-                Location = new Point(20, 620),
-                Size = new Size(400, 25),
+                Location = new Point(20, 660),
+                Size = new Size(500, 25),
                 ForeColor = Color.Red,
                 Font = new Font("Segoe UI", 10, FontStyle.Bold)
             };
@@ -332,7 +387,7 @@ namespace AutoClicker
             // Add all controls to form
             this.Controls.AddRange(new Control[]
             {
-                btnStartStop, gbClickInterval, gbMouseButton,
+                btnStartStop, gbClickInterval, gbRandomInterval, gbMouseButton,
                 cbFixedPosition, btnSetPosition, lblPosition,
                 gbMacro, txtDebug, lblStatus
             });
